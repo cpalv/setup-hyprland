@@ -1,6 +1,6 @@
 # Hyprland Fedora
 
-Install scripts for Hyprland on Fedora
+Install script for Hyprland v0.26.0 on Fedora
 
 ## Installation
 
@@ -14,5 +14,4 @@ Install scripts for Hyprland on Fedora
 
 ## Info
 
-The last version I successfully installed was v0.21.0beta check [here](https://github.com/hyprwm/Hyprland/releases)
-for latest releases.
+check [here](https://github.com/hyprwm/Hyprland/releases) for latest releases.

@@ -2,11 +2,10 @@ set -e
 
 [ $EUID -ne 0 ] && echo "admin access required for install" && exit 1
 
-dnf install -y xorg-x11-server-Xwayland xorg-x11-server-Xwayland-devel libxcb-devel xorg-x11-util-macros xcb-proto libdrm-devel libinput-devel wlroots-devel cairo-devel pango-devel wayland-protocols-devel doxygen systemd-devel automake autoconf cmake ninja-build git meson g++
-
+dnf install -y xorg-x11-server-Xwayland xorg-x11-server-Xwayland-devel libxcb-devel xorg-x11-util-macros xcb-proto libdrm-devel libdrm drm-utils wlroots-devel cairo-devel pango-devel wayland-protocols-devel doxygen systemd-devel automake autoconf cmake ninja-build git meson g++ libdisplay-info-devel hwdata-devel libseat libseat-devel
 
 # Create Hyprland script
-printf "LD_LIBRARY_PATH=/usr/local/lib exec Hyprland -c $HOME/.config/hypr/hyprland.conf" | tee -a /usr/bin/hypr.sh
+printf "LD_LIBRARY_PATH=/usr/local/lib exec Hyprland\n" > /usr/bin/hypr.sh
 chmod 755 /usr/bin/hypr.sh
 
 # Build libxcb-errors
@@ -31,25 +30,40 @@ if [[ ${pixmanver[1]} -lt 42 && ${pixmanver[2]} -lt 2 ]]; then
 	git clone git://anongit.freedesktop.org/git/pixman.git
 	cd pixman && git checkout pixman-0.42.2 && ./configure && make -j $(nproc) install
 	cd ..
-
 fi
 
-# Download meson-0.59.3 to build hyprland since the latest version in repos
-# will not build Hyprland due to warnings that have been bumped to errors
-curl -L https://github.com/mesonbuild/meson/releases/download/0.59.3/meson-0.59.3.tar.gz | tar xzf -
 
-# Download and install Hyprland v0.21.0beta
+# Download and install Hyprland v0.26.0
 git clone --recurse-submodules https://github.com/hyprwm/Hyprland.git
 cd Hyprland
-git reset --hard --recurse-submodules $(git rev-list -n 1 v0.21.0beta)
-sed -i "s:dependency('gl', 'opengl'),:dependency('gl'),\n    dependency('opengl'),:" src/meson.build
+
+liftoffver=(`dnf info libliftoff-devel | awk 'NR<10 && /Version/{split($3, arr, "."); print arr[1],arr[2],arr[3]}'`)
+
+# Future proof
+if [[ ${liftoffver[1]} -lt 4 && ${liftoffver[2]} -ge 0 ]]; then
+	cd subprojects
+	git clone https://gitlab.freedesktop.org/emersion/libliftoff.git
+	git reset --hard $(git rev-list -n 1 v0.4.1)
+	# just incase the directory gets caught in the next reset
+	rm -rf .git
+	cd ..
+else
+	dnf install libliftoff-devel
+fi
+
+git reset --hard --recurse-submodules $(git rev-list -n 1 v0.26.0)
+
 sed -i "s:Exec=Hyprland:Exec=/usr/bin/hypr.sh:" example/hyprland.desktop
-mkdir -p /usr/local/share/hyprland-protocols/protocols
-cp subprojects/hyprland-protocols/protocols/hyprland-toplevel-export-v1.xml /usr/local/share/hyprland-protocols/protocols/
 make clear
-make protocols
-../meson-0.59.3/meson.py setup --pkg-config-path=/usr/local/lib/pkgconfig _build
+
+meson setup --pkg-config-path=/usr/local/lib/pkgconfig _build
+
 ninja -C _build install
+
+USER_HOME=/home/$SUDO_USER
+mkdir -p $USER_HOME/.config
+cp ./example/hyprland.conf $USER_HOME/.config/
+chown -R $SUDO_USER:$SUDO_USER $USER_HOME/.config
 
 echo "Log out of your current desktop environment and try running Hyprland"
 echo "Or run manually /usr/bin/hypr.sh"
