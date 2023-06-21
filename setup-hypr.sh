@@ -2,7 +2,7 @@ set -e
 
 [ $EUID -ne 0 ] && echo "admin access required for install" && exit 1
 
-dnf install -y xorg-x11-server-Xwayland xorg-x11-server-Xwayland-devel libxcb-devel xorg-x11-util-macros libxcb-devel xcb-proto libseat wlroots-devel cairo-devel wayland-protocols-devel doxygen systemd-devel evel automake autoconf cmake ninja-build git
+dnf install -y xorg-x11-server-Xwayland xorg-x11-server-Xwayland-devel libxcb-devel xorg-x11-util-macros xcb-proto libdrm-devel libinput-devel wlroots-devel cairo-devel pango-devel wayland-protocols-devel doxygen systemd-devel automake autoconf cmake ninja-build git meson g++
 
 
 # Create Hyprland script
@@ -12,7 +12,8 @@ chmod 755 /usr/bin/hypr.sh
 # Build libxcb-errors
 # Cannot find this package in Fedora repos
 # If somebody knows feel free to update
-mkdir -p /usr/local/src && cd /usr/local/src
+mkdir -p /usr/local/src 
+cd /usr/local/src
 git clone https://gitlab.freedesktop.org/xorg/lib/libxcb-errors.git
 cd libxcb-errors/
 git submodule update --init
@@ -23,6 +24,7 @@ cd ..
 pixmanver=(`dnf info pixman-devel | awk 'NR<10 && /Version/{split($3, arr, "."); print arr[1],arr[2],arr[3]}'`)
 
 # Last time I checked Fedora 37 repos have pixman-devel 0.40.0 and Fedora 38 has 0.42.2
+# pixman-devel is already included as dependency in above install
 # $ dnf info --releasever ## PACKAGE
 if [[ ${pixmanver[1]} -lt 42 && ${pixmanver[2]} -lt 2 ]]; then
 	# Download and install pixamn-0.42.2
@@ -30,8 +32,6 @@ if [[ ${pixmanver[1]} -lt 42 && ${pixmanver[2]} -lt 2 ]]; then
 	cd pixman && git checkout pixman-0.42.2 && ./configure && make -j $(nproc) install
 	cd ..
 
-else
-	dnf install pixman-devel -y
 fi
 
 # Download meson-0.59.3 to build hyprland since the latest version in repos
@@ -40,11 +40,14 @@ curl -L https://github.com/mesonbuild/meson/releases/download/0.59.3/meson-0.59.
 
 # Download and install Hyprland v0.21.0beta
 git clone --recurse-submodules https://github.com/hyprwm/Hyprland.git
-cd Hyprland && git reset --hard --recurse-submodules $(git rev-list -n 1 v0.21.0beta)
+cd Hyprland
+git reset --hard --recurse-submodules $(git rev-list -n 1 v0.21.0beta)
 sed -i "s:dependency('gl', 'opengl'),:dependency('gl'),\n    dependency('opengl'),:" src/meson.build
 sed -i "s:Exec=Hyprland:Exec=/usr/bin/hypr.sh:" example/hyprland.desktop
 mkdir -p /usr/local/share/hyprland-protocols/protocols
 cp subprojects/hyprland-protocols/protocols/hyprland-toplevel-export-v1.xml /usr/local/share/hyprland-protocols/protocols/
+make clear
+make protocols
 ../meson-0.59.3/meson.py setup --pkg-config-path=/usr/local/lib/pkgconfig _build
 ninja -C _build install
 
