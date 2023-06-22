@@ -9,7 +9,7 @@ Install script for Hyprland v0.26.0 on Fedora
 ## Usage
 
 ```bash
-# ./setup-hypr.sh 
+$ sudo ./setup-hypr.sh 
 ```
 
 ## Info

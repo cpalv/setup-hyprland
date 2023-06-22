@@ -2,15 +2,18 @@ set -e
 
 [ $EUID -ne 0 ] && echo "admin access required for install" && exit 1
 
-dnf install -y xorg-x11-server-Xwayland xorg-x11-server-Xwayland-devel libxcb-devel xorg-x11-util-macros xcb-proto libdrm-devel libdrm drm-utils wlroots-devel cairo-devel pango-devel wayland-protocols-devel doxygen systemd-devel automake autoconf cmake ninja-build git meson g++ libdisplay-info-devel hwdata-devel libseat libseat-devel
+dnf install -y xorg-x11-server-Xwayland xorg-x11-server-Xwayland-devel libxcb-devel \
+	xorg-x11-util-macros xcb-proto libdrm-devel libdrm drm-utils wlroots-devel \
+	cairo-devel pango-devel wayland-protocols-devel doxygen systemd-devel \
+	automake autoconf cmake ninja-build git meson g++ libdisplay-info-devel \
+	hwdata-devel libseat libseat-devel
 
 # Create Hyprland script
 printf "LD_LIBRARY_PATH=/usr/local/lib exec Hyprland\n" > /usr/bin/hypr.sh
 chmod 755 /usr/bin/hypr.sh
 
 # Build libxcb-errors
-# Cannot find this package in Fedora repos
-# If somebody knows feel free to update
+# As it does not exist in Fedora repos
 mkdir -p /usr/local/src 
 cd /usr/local/src
 git clone https://gitlab.freedesktop.org/xorg/lib/libxcb-errors.git
@@ -22,7 +25,7 @@ cd ..
 
 pixmanver=(`dnf info pixman-devel | awk 'NR<10 && /Version/{split($3, arr, "."); print arr[1],arr[2],arr[3]}'`)
 
-# Last time I checked Fedora 37 repos have pixman-devel 0.40.0 and Fedora 38 has 0.42.2
+# Fedora 37 repos have pixman-devel 0.40.0 and Fedora 38 has 0.42.2
 # pixman-devel is already included as dependency in above install
 # $ dnf info --releasever ## PACKAGE
 if [[ ${pixmanver[1]} -lt 42 && ${pixmanver[2]} -lt 2 ]]; then
@@ -39,8 +42,10 @@ cd Hyprland
 
 liftoffver=(`dnf info libliftoff-devel | awk 'NR<10 && /Version/{split($3, arr, "."); print arr[1],arr[2],arr[3]}'`)
 
-# Future proof
-if [[ ${liftoffver[1]} -lt 4 && ${liftoffver[2]} -ge 0 ]]; then
+# As of Fedora 38 libliftoff-devel is 0.3.0
+if ! [[ ${liftoffver[1]} -ge 4 && ${liftoffver[2]} -ge 0 ]]; then
+	# Download libliftoff, do not build.  It will be
+	# built during Hyprland build process
 	cd subprojects
 	git clone https://gitlab.freedesktop.org/emersion/libliftoff.git
 	git reset --hard $(git rev-list -n 1 v0.4.1)
@@ -60,10 +65,21 @@ meson setup --pkg-config-path=/usr/local/lib/pkgconfig _build
 
 ninja -C _build install
 
-USER_HOME=/home/$SUDO_USER
+USER_HOME=""
+REAL_USER=""
+if [ -n "${SUDO_USER}" ]; then
+	USER_HOME=/home/$SUDO_USER 
+	REAL_USER=$SUDO_USER
+fi
+
+if [ -n "${DOAS_USER}" ]; then
+	USER_HOME=/home/$DOAS_USER
+	REAL_USER=$DOAS_USER
+fi
+
 mkdir -p $USER_HOME/.config
 cp ./example/hyprland.conf $USER_HOME/.config/
-chown -R $SUDO_USER:$SUDO_USER $USER_HOME/.config
+chown -R $REAL_USER:$REAL_USER $USER_HOME/.config
 
 echo "Log out of your current desktop environment and try running Hyprland"
 echo "Or run manually /usr/bin/hypr.sh"
